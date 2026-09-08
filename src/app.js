@@ -43,15 +43,40 @@ async function joinTargetVoiceChannel() {
       return;
     }
 
-    joinVoiceChannel({
+    const connection = joinVoiceChannel({
       channelId: channel.id,
       guildId: channel.guild.id,
       adapterCreator: channel.guild.voiceAdapterCreator,
-      selfDeaf: true,
-      selfMute: false,
+      selfDeaf: false,
     });
 
     console.log(`Joined voice channel: ${channel.name} (${channel.id})`);
+
+    // Wait for connection to be ready
+    return new Promise((resolve) => {
+      if (connection.state.status === VoiceConnectionStatus.Ready) {
+        console.log('[joinTargetVoiceChannel] Connection is ready immediately');
+        resolve();
+        return;
+      }
+
+      const handler = (state) => {
+        console.log(`[joinTargetVoiceChannel] Connection state changed to: ${state.status}`);
+        if (state.status === VoiceConnectionStatus.Ready) {
+          connection.off('stateChange', handler);
+          resolve();
+        }
+      };
+
+      connection.on('stateChange', handler);
+
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        connection.off('stateChange', handler);
+        console.warn('[joinTargetVoiceChannel] Connection ready timeout');
+        resolve();
+      }, 10000);
+    });
   } catch (error) {
     console.error('Error joining target voice channel:', error);
   }
