@@ -82,6 +82,24 @@ async function joinTargetVoiceChannel() {
   }
 }
 
+async function sendTextAnnouncement(member, type, voiceChannel) {
+  try {
+    if (!member || member.user?.bot) {
+      return;
+    }
+
+    const username = member.displayName || member.user.username;
+    const text = type === 'joined'
+      ? `**${username}** joined the voice channel`
+      : `**${username}** left the voice channel`;
+
+    await voiceChannel.send(text);
+    console.log(`[sendTextAnnouncement] Sent: ${text}`);
+  } catch (error) {
+    console.error('Error sending text announcement:', error);
+  }
+}
+
 async function waitForConnectionReady(connection) {
   return new Promise((resolve) => {
     if (connection.state.status === VoiceConnectionStatus.Ready) {
@@ -123,6 +141,9 @@ async function announceEvent(member, type, channelName) {
       console.error(`Voice channel ${VOICE_CHANNEL_ID} not found or not voice-based.`);
       return;
     }
+
+    // Send text announcement
+    await sendTextAnnouncement(member, type, voiceChannel);
 
     const guildId = voiceChannel.guildId;
     const connection = getVoiceConnection(guildId);
