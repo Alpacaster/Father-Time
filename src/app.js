@@ -105,11 +105,29 @@ async function announceEvent(member, type, channelName) {
       'pipe:1'
     ]);
 
+    // Log FFmpeg errors and stderr
+    ffmpeg.stderr.on('data', (data) => {
+      console.log(`[FFmpeg stderr] ${data.toString()}`);
+    });
+
+    ffmpeg.on('error', (error) => {
+      console.error('[FFmpeg error]', error);
+    });
+
+    ffmpeg.on('close', (code) => {
+      console.log(`[FFmpeg] Process closed with code ${code}`);
+    });
+
     const audioStream = Readable.from(Buffer.from(audioBuffer));
     audioStream.pipe(ffmpeg.stdin);
 
     // Create audio player and resource from FFmpeg PCM output
     const player = createAudioPlayer();
+
+    ffmpeg.stdout.on('error', (error) => {
+      console.error('[FFmpeg stdout error]', error);
+    });
+
     const resource = createAudioResource(ffmpeg.stdout, {
       inputType: StreamType.Raw,
       inlineVolume: true,
