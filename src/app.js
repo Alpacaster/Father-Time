@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
-import { joinVoiceChannel, getVoiceConnection } from '@discordjs/voice';
+import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
+import { tts } from 'google-tts-api';
 
 const VOICE_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
@@ -69,16 +70,39 @@ async function announceEvent(member, type, channelName) {
       return;
     }
 
-    const message = type === 'joined' 
+    const guildId = voiceChannel.guildId;
+    const connection = getVoiceConnection(guildId);
+    if (!connection) {
+      console.error('Bot is not connected to voice channel.');
+      return;
+    }
+
+    const text = type === 'joined'
       ? `${member.displayName || member.user.username} joined the voice channel`
       : `${member.displayName || member.user.username} left the voice channel`;
 
-    await voiceChannel.send({ 
-      content: message,
-      tts: true
+    // Generate TTS audio URL
+    const url = await tts.getAudioUrl(text, {
+      lang: 'en',
+      slow: false,
+      host: 'https://translate.google.com',
     });
-    
-    console.log(`[announceEvent] Sent TTS announcement: ${message}`);
+
+    // Create audio player and resource
+    const player = createAudioPlayer();
+    const resource = createAudioResource(url);
+
+    player.play(resource);
+    connection.subscribe(player);
+
+    player.on(AudioPlayerStatus.Idle, () => {
+      console.log(`[announceEvent] Finished playing: ${text}`);
+      player.stop();
+    });
+
+    player.on('error', (error) => {
+      console.error('Audio player error:', error);
+    });
   } catch (error) {
     console.error('Error announcing voice state event:', error);
   }
