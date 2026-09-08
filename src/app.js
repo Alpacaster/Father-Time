@@ -1,7 +1,8 @@
 import 'dotenv/config';
+import { spawn } from 'child_process';
 import { Readable } from 'node:stream';
 import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
-import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
+import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus, StreamType } from '@discordjs/voice';
 import gapi from 'google-tts-api';
 const { getAudioUrl } = gapi;
 
@@ -95,16 +96,26 @@ async function announceEvent(member, type, channelName) {
     const audioResponse = await fetch(url);
     const audioBuffer = await audioResponse.arrayBuffer();
 
-    // Create a stream from buffer without FFmpeg processing
-    const audioStream = Readable.from(Buffer.from(audioBuffer));
+    // Use FFmpeg to decode MP3 to PCM
+    const ffmpeg = spawn('ffmpeg', [
+      '-i', 'pipe:0',
+      '-f', 's16le',
+      '-ar', '48000',
+      '-ac', '2',
+      'pipe:1'
+    ]);
 
-    // Create audio player and resource from stream
+    const audioStream = Readable.from(Buffer.from(audioBuffer));
+    audioStream.pipe(ffmpeg.stdin);
+
+    // Create audio player and resource from FFmpeg PCM output
     const player = createAudioPlayer();
-    const resource = createAudioResource(audioStream, {
+    const resource = createAudioResource(ffmpeg.stdout, {
+      inputType: StreamType.Raw,
       inlineVolume: true,
     });
 
-    console.log(`[announceEvent] Created audio resource, buffer size: ${audioBuffer.byteLength}`);
+    console.log(`[announceEvent] Created audio resource from FFmpeg, buffer size: ${audioBuffer.byteLength}`);
 
     player.on('error', error => {
       console.error('[announceEvent] Player error:', error);
