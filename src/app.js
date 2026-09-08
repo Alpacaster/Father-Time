@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
 import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
-import { tts } from 'google-tts-api';
+import gapi from 'google-tts-api';
+const { getAudioUrl } = gapi;
 
 const VOICE_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
@@ -82,7 +83,7 @@ async function announceEvent(member, type, channelName) {
       : `${member.displayName || member.user.username} left the voice channel`;
 
     // Generate TTS audio URL
-    const url = await tts.getAudioUrl(text, {
+    const url = await getAudioUrl(text, {
       lang: 'en',
       slow: false,
       host: 'https://translate.google.com',
