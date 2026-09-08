@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { spawn } from 'child_process';
 import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
 import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus, StreamType } from '@discordjs/voice';
+import { Readable } from 'node:stream';
 import gapi from 'google-tts-api';
 const { getAudioUrl } = gapi;
 
@@ -131,20 +132,16 @@ async function announceEvent(member, type, channelName) {
       ffmpeg.stdin.end();
     });
 
-    // Create resource from complete PCM buffer
+    // Create resource from complete PCM buffer using Readable.from()
     const pcmBuffer = Buffer.concat(chunks);
     console.log(`[announceEvent] Created PCM buffer, size: ${pcmBuffer.byteLength}`);
 
     const player = createAudioPlayer();
-    const { PassThrough } = await import('node:stream');
-    const audioStream = new PassThrough();
+    const audioStream = Readable.from([pcmBuffer]);
     const resource = createAudioResource(audioStream, {
       inputType: StreamType.Raw,
       inlineVolume: true,
     });
-
-    // Write buffer and end the stream
-    audioStream.end(pcmBuffer);
 
     // Log all player state changes
     player.on(AudioPlayerStatus.Playing, () => {
