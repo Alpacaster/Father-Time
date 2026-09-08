@@ -95,17 +95,18 @@ async function announceEvent(member, type, channelName) {
     const audioResponse = await fetch(url);
     const audioBuffer = await audioResponse.arrayBuffer();
 
-    // Use FFmpeg to decode MP3 to PCM and buffer output
+    // Use FFmpeg to decode MP3 and encode to Ogg-wrapped Opus for Discord voice
     const ffmpeg = spawn('ffmpeg', [
       '-i', 'pipe:0',
-      '-f', 's16le',
-      '-ar', '48000',
-      '-ac', '2',
+      '-c:a', 'libopus',
+      '-b:a', '128k',
+      '-vn',
+      '-f', 'ogg',    // Ogg container with Opus
       '-v', 'quiet',  // Suppress stderr
       'pipe:1'
     ]);
 
-    // Collect all PCM data
+    // Collect all Ogg-Opus data
     const chunks = [];
     ffmpeg.stdout.on('data', chunk => chunks.push(chunk));
 
@@ -131,20 +132,20 @@ async function announceEvent(member, type, channelName) {
       ffmpeg.stdin.end();
     });
 
-    // Create resource from complete PCM buffer
-    const pcmBuffer = Buffer.concat(chunks);
-    console.log(`[announceEvent] Created PCM buffer, size: ${pcmBuffer.byteLength}`);
+    // Create resource from complete Ogg-Opus buffer
+    const opusBuffer = Buffer.concat(chunks);
+    console.log(`[announceEvent] Created Ogg-Opus buffer, size: ${opusBuffer.byteLength}`);
 
     const player = createAudioPlayer();
     const { PassThrough } = await import('node:stream');
     const audioStream = new PassThrough();
     const resource = createAudioResource(audioStream, {
-      inputType: StreamType.Raw,
+      inputType: StreamType.OggOpus,
       inlineVolume: true,
     });
 
     // Write buffer and end the stream
-    audioStream.end(pcmBuffer);
+    audioStream.end(opusBuffer);
 
     // Log all player state changes
     player.on(AudioPlayerStatus.Playing, () => {
