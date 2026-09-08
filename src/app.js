@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
-import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
+import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus, AudioPlayerStreamType } from '@discordjs/voice';
 import gapi from 'google-tts-api';
 const { getAudioUrl } = gapi;
 
@@ -89,9 +89,16 @@ async function announceEvent(member, type, channelName) {
       host: 'https://translate.google.com',
     });
 
-    // Create audio player and resource
+    // Fetch audio as buffer
+    console.log(`[announceEvent] Fetching audio from: ${url}`);
+    const audioResponse = await fetch(url);
+    const audioBuffer = await audioResponse.arrayBuffer();
+
+    // Create audio player and resource from buffer
     const player = createAudioPlayer();
-    const resource = createAudioResource(url);
+    const resource = createAudioResource(Buffer.from(audioBuffer), {
+      inputType: AudioPlayerStreamType.MP3,
+    });
 
     player.play(resource);
     connection.subscribe(player);
