@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
-import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus, AudioPlayerStreamType } from '@discordjs/voice';
+import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
 import gapi from 'google-tts-api';
 const { getAudioUrl } = gapi;
 
@@ -96,9 +96,7 @@ async function announceEvent(member, type, channelName) {
 
     // Create audio player and resource from buffer
     const player = createAudioPlayer();
-    const resource = createAudioResource(Buffer.from(audioBuffer), {
-      inputType: AudioPlayerStreamType.MP3,
-    });
+    const resource = createAudioResource(Buffer.from(audioBuffer));
 
     player.play(resource);
     connection.subscribe(player);
