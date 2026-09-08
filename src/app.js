@@ -142,23 +142,24 @@ async function announceEvent(member, type, channelName) {
       inlineVolume: true,
     });
 
-    player.on('error', error => {
-      console.error('[announceEvent] Player error:', error);
+    // Log all player state changes
+    player.on(AudioPlayerStatus.Playing, () => {
+      console.log(`[Player] Now playing: ${text}`);
     });
-
-    resource.playStream.on('error', error => {
-      console.error('[announceEvent] Resource stream error:', error);
-    });
-
-    player.play(resource);
-    connection.subscribe(player);
-
-    console.log(`[announceEvent] Playing audio for ${member.user.username} (${type})`);
 
     player.on(AudioPlayerStatus.Idle, () => {
-      console.log(`[announceEvent] Finished playing: ${text}`);
+      console.log(`[Player] Finished playing: ${text}`);
       player.stop();
     });
+
+    player.on('error', error => {
+      console.error('[Player error]', error);
+    });
+
+    console.log(`[announceEvent] About to play audio, connection state: ${connection.state?.status}`);
+    player.play(resource);
+    connection.subscribe(player);
+    console.log(`[announceEvent] Called player.play() and connection.subscribe()`);
   } catch (error) {
     console.error('Error announcing voice state event:', error);
   }
@@ -252,3 +253,4 @@ client.login(DISCORD_TOKEN).catch((error) => {
 });
 
 export default client;
+
