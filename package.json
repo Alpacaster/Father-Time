@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@discordjs/voice": "^0.17.0",
-    "@discordjs/opus": "^0.8.0",
+    "opusscript": "^0.0.8",
     "discord.js": "^14.26.4",
     "dotenv": "^17.2.3",
     "google-tts-api": "^2.0.2"
