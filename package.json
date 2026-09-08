@@ -15,7 +15,7 @@
     "google-tts-api": "^2.0.2",
     "winston": "^3.11.0",
     "axios": "^1.6.0",
-    "riffy": "^3.0.0",
+    "riffy": "^1.0.0",
     "node-cron": "^3.0.3"
   },
   "engines": {
