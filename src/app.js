@@ -1,9 +1,8 @@
 import 'dotenv/config';
-import { Client, GatewayIntentBits, ChannelType, EmbedBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
 import { joinVoiceChannel, getVoiceConnection } from '@discordjs/voice';
 
 const VOICE_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
-const ANNOUNCE_CHANNEL_ID = process.env.ANNOUNCE_CHANNEL_ID;
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 
 const RECONNECT_DELAY_MS = 5000;
@@ -54,42 +53,32 @@ async function joinTargetVoiceChannel() {
 }
 
 async function announceEvent(member, type, channelName) {
+  console.log(`[announceEvent] Called with member: ${member?.user?.username}, type: ${type}, channel: ${channelName}`);
   try {
     if (!member || member.user?.bot) {
       return;
     }
 
-    if (!ANNOUNCE_CHANNEL_ID) {
-      console.error('ANNOUNCE_CHANNEL_ID is not set. Cannot send announcement.');
-      return;
-    }
-
-    const announceChannel = await client.channels.fetch(ANNOUNCE_CHANNEL_ID).catch((error) => {
-      console.error(`Failed to fetch announce channel ${ANNOUNCE_CHANNEL_ID}:`, error);
+    const voiceChannel = await client.channels.fetch(VOICE_CHANNEL_ID).catch((error) => {
+      console.error(`Failed to fetch voice channel ${VOICE_CHANNEL_ID}:`, error);
       return null;
     });
 
-    if (!announceChannel || !announceChannel.isTextBased?.()) {
-      console.error(`Announce channel ${ANNOUNCE_CHANNEL_ID} not found or not text-based.`);
+    if (!voiceChannel || !voiceChannel.isVoiceBased?.()) {
+      console.error(`Voice channel ${VOICE_CHANNEL_ID} not found or not voice-based.`);
       return;
     }
 
-    const isJoin = type === 'joined';
+    const message = type === 'joined' 
+      ? `${member.displayName || member.user.username} joined the voice channel`
+      : `${member.displayName || member.user.username} left the voice channel`;
 
-    const embed = new EmbedBuilder()
-      .setColor(isJoin ? 0x57f287 : 0xed4245)
-      .setAuthor({
-        name: member.displayName || member.user.username,
-        iconURL: member.user.displayAvatarURL(),
-      })
-      .setDescription(
-        isJoin
-          ? `**${member.displayName || member.user.username}** joined **${channelName}**`
-          : `**${member.displayName || member.user.username}** left **${channelName}**`
-      )
-      .setTimestamp();
-
-    await announceChannel.send({ embeds: [embed] });
+    await voiceChannel.send({ 
+      content: message,
+      tts: true
+    });
+    
+    console.log(`[announceEvent] Sent TTS announcement: ${message}`);
   } catch (error) {
     console.error('Error announcing voice state event:', error);
   }
