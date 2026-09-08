@@ -96,48 +96,51 @@ async function announceEvent(member, type, channelName) {
     const audioResponse = await fetch(url);
     const audioBuffer = await audioResponse.arrayBuffer();
 
-    // Use FFmpeg to decode MP3 to PCM
+    // Use FFmpeg to decode MP3 to PCM and buffer output
     const ffmpeg = spawn('ffmpeg', [
       '-i', 'pipe:0',
       '-f', 's16le',
       '-ar', '48000',
       '-ac', '2',
+      '-v', 'quiet',  // Suppress stderr
       'pipe:1'
     ]);
 
-    // Log FFmpeg errors and stderr
+    // Collect all PCM data
+    const chunks = [];
+    ffmpeg.stdout.on('data', chunk => chunks.push(chunk));
+
     ffmpeg.stderr.on('data', (data) => {
-      console.log(`[FFmpeg stderr] ${data.toString()}`);
+      console.log(`[FFmpeg] ${data.toString()}`);
     });
 
     ffmpeg.on('error', (error) => {
       console.error('[FFmpeg error]', error);
     });
 
-    ffmpeg.on('close', (code) => {
-      console.log(`[FFmpeg] Process closed with code ${code}`);
-    });
-
-    const audioStream = Readable.from(Buffer.from(audioBuffer));
-    audioStream.pipe(ffmpeg.stdin);
-    audioStream.on('end', () => {
-      console.log('[FFmpeg] Audio stream piped, closing stdin');
+    // Pipe input and wait for completion
+    await new Promise((resolve, reject) => {
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          console.log('[FFmpeg] Encoding complete');
+          resolve();
+        } else {
+          reject(new Error(`FFmpeg exited with code ${code}`));
+        }
+      });
+      ffmpeg.stdin.write(Buffer.from(audioBuffer));
       ffmpeg.stdin.end();
     });
 
-    // Create audio player and resource from FFmpeg PCM output
+    // Create resource from complete PCM buffer
+    const pcmBuffer = Buffer.concat(chunks);
+    console.log(`[announceEvent] Created PCM buffer, size: ${pcmBuffer.byteLength}`);
+
     const player = createAudioPlayer();
-
-    ffmpeg.stdout.on('error', (error) => {
-      console.error('[FFmpeg stdout error]', error);
-    });
-
-    const resource = createAudioResource(ffmpeg.stdout, {
+    const resource = createAudioResource(Readable.from(pcmBuffer), {
       inputType: StreamType.Raw,
       inlineVolume: true,
     });
-
-    console.log(`[announceEvent] Created audio resource from FFmpeg, buffer size: ${audioBuffer.byteLength}`);
 
     player.on('error', error => {
       console.error('[announceEvent] Player error:', error);
