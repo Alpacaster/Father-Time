@@ -54,6 +54,7 @@ async function joinTargetVoiceChannel() {
 }
 
 async function announceEvent(member, type, channelName) {
+  console.log(`[announceEvent] Called with member: ${member?.user?.username}, type: ${type}, channel: ${channelName}`);
   try {
     if (!member || member.user?.bot) {
       return;
@@ -111,6 +112,9 @@ client.once('ready', async () => {
 });
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
+  console.log(`[voiceStateUpdate] oldState.member: ${oldState.member?.user?.username}, oldState.channelId: ${oldState.channelId}`);
+  console.log(`[voiceStateUpdate] newState.member: ${newState.member?.user?.username}, newState.channelId: ${newState.channelId}`);
+
   try {
     const botLeft =
       oldState.member?.id === client.user.id &&
