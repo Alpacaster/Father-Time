@@ -12,11 +12,7 @@
     "opusscript": "^0.0.8",
     "discord.js": "^14.26.4",
     "dotenv": "^17.2.3",
-    "google-tts-api": "^2.0.2",
-    "winston": "^3.11.0",
-    "axios": "^1.6.0",
-    "riffy": "^1.0.0",
-    "node-cron": "^3.0.3"
+    "google-tts-api": "^2.0.2"
   },
   "engines": {
     "node": ">=20.10.0"

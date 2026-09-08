@@ -1,23 +1,15 @@
 import 'dotenv/config';
 import { spawn } from 'child_process';
-import { Client, GatewayIntentBits, ChannelType, Collection } from 'discord.js';
-import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus, StreamType, VoiceConnectionStatus } from '@discordjs/voice';
+import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
+import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus, StreamType } from '@discordjs/voice';
 import { Readable } from 'node:stream';
 import gapi from 'google-tts-api';
-import { readdir } from 'fs/promises';
-import { join } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
-import { dirname } from 'path';
-
 const { getAudioUrl } = gapi;
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const VOICE_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 
 const RECONNECT_DELAY_MS = 5000;
-const CONNECTION_READY_TIMEOUT_MS = 5000;
 
 const client = new Client({
   intents: [
@@ -25,70 +17,24 @@ const client = new Client({
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.DirectMessages,
-    GatewayIntentBits.GuildMessages,
   ],
 });
 
-client.commands = new Collection();
-
-async function loadCommands() {
+async function sendTextAnnouncement(member, type, voiceChannel) {
   try {
-    const commandsPath = join(__dirname, 'commands');
-    console.log(`Loading commands from ${commandsPath}`);
-
-    async function getAllFiles(directory, fileList = []) {
-      const entries = await readdir(directory, { withFileTypes: true });
-      for (const entry of entries) {
-        const entryPath = join(directory, entry.name);
-        if (entry.isDirectory() && entry.name !== 'modules') {
-          await getAllFiles(entryPath, fileList);
-        } else if (entry.name.endsWith('.js')) {
-          fileList.push(entryPath);
-        }
-      }
-      return fileList;
-    }
-
-    const commandFiles = await getAllFiles(commandsPath);
-    console.log(`Found ${commandFiles.length} command files`);
-
-    for (const filePath of commandFiles) {
-      try {
-        const module = await import(pathToFileURL(filePath).href);
-        const command = module.default;
-
-        if (!command.data || !command.execute) {
-          console.warn(`Command at ${filePath} missing data or execute`);
-          continue;
-        }
-
-        client.commands.set(command.data.name, command);
-        console.log(`Loaded command: ${command.data.name}`);
-      } catch (error) {
-        console.error(`Error loading command ${filePath}:`, error);
-      }
-    }
-
-    console.log(`Total commands loaded: ${client.commands.size}`);
-  } catch (error) {
-    console.error('Error loading commands:', error);
-  }
-}
-
-async function registerCommands() {
-  try {
-    const commands = Array.from(client.commands.values()).map(cmd => cmd.data.toJSON());
-    
-    if (commands.length === 0) {
-      console.warn('No commands to register');
+    if (!member || member.user?.bot) {
       return;
     }
 
-    console.log(`Registering ${commands.length} commands...`);
-    await client.rest.put(`/applications/${client.application.id}/commands`, { body: commands });
-    console.log('Commands registered successfully');
+    const username = member.displayName || member.user.username;
+    const text = type === 'joined'
+      ? `**${username}** joined the voice channel`
+      : `**${username}** left the voice channel`;
+
+    await voiceChannel.send(text);
+    console.log(`[sendTextAnnouncement] Sent: ${text}`);
   } catch (error) {
-    console.error('Error registering commands:', error);
+    console.error('Error sending text announcement:', error);
   }
 }
 
@@ -114,83 +60,18 @@ async function joinTargetVoiceChannel() {
       return;
     }
 
-    const connection = joinVoiceChannel({
+    joinVoiceChannel({
       channelId: channel.id,
       guildId: channel.guild.id,
       adapterCreator: channel.guild.voiceAdapterCreator,
-      selfDeaf: false,
+      selfDeaf: true,
+      selfMute: false,
     });
 
     console.log(`Joined voice channel: ${channel.name} (${channel.id})`);
-
-    return new Promise((resolve) => {
-      if (connection.state.status === VoiceConnectionStatus.Ready) {
-        console.log('[joinTargetVoiceChannel] Connection is ready immediately');
-        resolve();
-        return;
-      }
-
-      const handler = (state) => {
-        console.log(`[joinTargetVoiceChannel] Connection state changed to: ${state.status}`);
-        if (state.status === VoiceConnectionStatus.Ready) {
-          connection.off('stateChange', handler);
-          resolve();
-        }
-      };
-
-      connection.on('stateChange', handler);
-
-      setTimeout(() => {
-        connection.off('stateChange', handler);
-        console.warn('[joinTargetVoiceChannel] Connection ready timeout');
-        resolve();
-      }, 10000);
-    });
   } catch (error) {
     console.error('Error joining target voice channel:', error);
   }
-}
-
-async function sendTextAnnouncement(member, type, voiceChannel) {
-  try {
-    if (!member || member.user?.bot) {
-      return;
-    }
-
-    const username = member.displayName || member.user.username;
-    const text = type === 'joined'
-      ? `**${username}** joined the voice channel`
-      : `**${username}** left the voice channel`;
-
-    await voiceChannel.send(text);
-    console.log(`[sendTextAnnouncement] Sent: ${text}`);
-  } catch (error) {
-    console.error('Error sending text announcement:', error);
-  }
-}
-
-async function waitForConnectionReady(connection) {
-  return new Promise((resolve) => {
-    if (connection.state.status === VoiceConnectionStatus.Ready) {
-      resolve();
-      return;
-    }
-
-    const handler = (state) => {
-      if (state.status === VoiceConnectionStatus.Ready) {
-        connection.off('stateChange', handler);
-        resolve();
-      }
-    };
-
-    connection.on('stateChange', handler);
-
-    setTimeout(() => {
-      connection.off('stateChange', handler);
-      console.warn('[announceEvent] Connection ready timeout, attempting to play anyway');
-      resolve();
-    }, CONNECTION_READY_TIMEOUT_MS);
-  });
 }
 
 async function announceEvent(member, type, channelName) {
@@ -210,6 +91,7 @@ async function announceEvent(member, type, channelName) {
       return;
     }
 
+    // Send text announcement
     await sendTextAnnouncement(member, type, voiceChannel);
 
     const guildId = voiceChannel.guildId;
@@ -219,32 +101,33 @@ async function announceEvent(member, type, channelName) {
       return;
     }
 
-    console.log(`[announceEvent] Waiting for connection to be ready. Current state: ${connection.state.status}`);
-    await waitForConnectionReady(connection);
-
     const text = type === 'joined'
       ? `${member.displayName || member.user.username} joined the voice channel`
       : `${member.displayName || member.user.username} left the voice channel`;
 
+    // Generate TTS audio URL
     const url = await getAudioUrl(text, {
       lang: 'en',
       slow: false,
       host: 'https://translate.google.com',
     });
 
+    // Fetch audio as buffer
     console.log(`[announceEvent] Fetching audio from: ${url}`);
     const audioResponse = await fetch(url);
     const audioBuffer = await audioResponse.arrayBuffer();
 
+    // Use FFmpeg to decode MP3 to PCM and buffer output
     const ffmpeg = spawn('ffmpeg', [
       '-i', 'pipe:0',
       '-f', 's16le',
       '-ar', '48000',
       '-ac', '2',
-      '-v', 'quiet',
+      '-v', 'quiet',  // Suppress stderr
       'pipe:1'
     ]);
 
+    // Collect all PCM data
     const chunks = [];
     ffmpeg.stdout.on('data', chunk => chunks.push(chunk));
 
@@ -256,6 +139,7 @@ async function announceEvent(member, type, channelName) {
       console.error('[FFmpeg error]', error);
     });
 
+    // Pipe input and wait for completion
     await new Promise((resolve, reject) => {
       ffmpeg.on('close', (code) => {
         if (code === 0) {
@@ -269,6 +153,7 @@ async function announceEvent(member, type, channelName) {
       ffmpeg.stdin.end();
     });
 
+    // Create resource from complete PCM buffer using Readable.from()
     const pcmBuffer = Buffer.concat(chunks);
     console.log(`[announceEvent] Created PCM buffer, size: ${pcmBuffer.byteLength}`);
 
@@ -279,6 +164,7 @@ async function announceEvent(member, type, channelName) {
       inlineVolume: true,
     });
 
+    // Log all player state changes
     player.on(AudioPlayerStatus.Playing, () => {
       console.log(`[Player] Now playing: ${text}`);
     });
@@ -292,7 +178,7 @@ async function announceEvent(member, type, channelName) {
       console.error('[Player error]', error);
     });
 
-    console.log(`[announceEvent] About to play audio, connection state: ${connection.state.status}`);
+    console.log(`[announceEvent] About to play audio, connection state: ${connection.state?.status}`);
     player.play(resource);
     connection.subscribe(player);
     console.log(`[announceEvent] Called player.play() and connection.subscribe()`);
@@ -311,27 +197,8 @@ client.once('ready', async () => {
     });
 
     await joinTargetVoiceChannel();
-    await registerCommands();
   } catch (error) {
     console.error('Error during ready event:', error);
-  }
-});
-
-client.on('interactionCreate', async (interaction) => {
-  if (interaction.isChatInputCommand()) {
-    const command = client.commands.get(interaction.commandName);
-    if (!command) return;
-
-    try {
-      await command.execute(interaction, {}, client);
-    } catch (error) {
-      console.error(`Error executing command ${interaction.commandName}:`, error);
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ content: 'There was an error executing this command!' });
-      } else {
-        await interaction.reply({ content: 'There was an error executing this command!', ephemeral: true });
-      }
-    }
   }
 });
 
@@ -397,26 +264,15 @@ async function shutdown(reason) {
 
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-async function start() {
-  if (!DISCORD_TOKEN) {
-    console.error('DISCORD_TOKEN is not set. Cannot log in.');
-    process.exit(1);
-  }
-
-  try {
-    console.log('Loading commands...');
-    await loadCommands();
-    
-    console.log('Logging in to Discord...');
-    await client.login(DISCORD_TOKEN);
-  } catch (error) {
-    console.error('Failed to start bot:', error);
-    process.exit(1);
-  }
+if (!DISCORD_TOKEN) {
+  console.error('DISCORD_TOKEN is not set. Cannot log in.');
+  process.exit(1);
 }
 
-console.log('=== Father-Time Starting ===');
-start();
+client.login(DISCORD_TOKEN).catch((error) => {
+  console.error('Failed to log in to Discord:', error);
+  process.exit(1);
+});
 
 export default client;
 
