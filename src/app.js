@@ -104,16 +104,24 @@ async function announceEvent(member, type, channelName) {
       inlineVolume: true,
     });
 
+    console.log(`[announceEvent] Created audio resource, buffer size: ${audioBuffer.byteLength}`);
+
+    player.on('error', error => {
+      console.error('[announceEvent] Player error:', error);
+    });
+
+    resource.playStream.on('error', error => {
+      console.error('[announceEvent] Resource stream error:', error);
+    });
+
     player.play(resource);
     connection.subscribe(player);
+
+    console.log(`[announceEvent] Playing audio for ${member.user.username} (${type})`);
 
     player.on(AudioPlayerStatus.Idle, () => {
       console.log(`[announceEvent] Finished playing: ${text}`);
       player.stop();
-    });
-
-    player.on('error', (error) => {
-      console.error('Audio player error:', error);
     });
   } catch (error) {
     console.error('Error announcing voice state event:', error);
