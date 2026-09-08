@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { spawn } from 'child_process';
 import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
-import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus, StreamType } from '@discordjs/voice';
+import { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus, StreamType, VoiceConnectionStatus } from '@discordjs/voice';
 import { Readable } from 'node:stream';
 import gapi from 'google-tts-api';
 const { getAudioUrl } = gapi;
@@ -10,6 +10,7 @@ const VOICE_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 
 const RECONNECT_DELAY_MS = 5000;
+const CONNECTION_READY_TIMEOUT_MS = 5000;
 
 const client = new Client({
   intents: [
@@ -56,6 +57,31 @@ async function joinTargetVoiceChannel() {
   }
 }
 
+async function waitForConnectionReady(connection) {
+  return new Promise((resolve) => {
+    if (connection.state.status === VoiceConnectionStatus.Ready) {
+      resolve();
+      return;
+    }
+
+    const handler = (state) => {
+      if (state.status === VoiceConnectionStatus.Ready) {
+        connection.off('stateChange', handler);
+        resolve();
+      }
+    };
+
+    connection.on('stateChange', handler);
+
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      connection.off('stateChange', handler);
+      console.warn('[announceEvent] Connection ready timeout, attempting to play anyway');
+      resolve();
+    }, CONNECTION_READY_TIMEOUT_MS);
+  });
+}
+
 async function announceEvent(member, type, channelName) {
   console.log(`[announceEvent] Called with member: ${member?.user?.username}, type: ${type}, channel: ${channelName}`);
   try {
@@ -79,6 +105,9 @@ async function announceEvent(member, type, channelName) {
       console.error('Bot is not connected to voice channel.');
       return;
     }
+
+    console.log(`[announceEvent] Waiting for connection to be ready. Current state: ${connection.state.status}`);
+    await waitForConnectionReady(connection);
 
     const text = type === 'joined'
       ? `${member.displayName || member.user.username} joined the voice channel`
@@ -157,7 +186,7 @@ async function announceEvent(member, type, channelName) {
       console.error('[Player error]', error);
     });
 
-    console.log(`[announceEvent] About to play audio, connection state: ${connection.state?.status}`);
+    console.log(`[announceEvent] About to play audio, connection state: ${connection.state.status}`);
     player.play(resource);
     connection.subscribe(player);
     console.log(`[announceEvent] Called player.play() and connection.subscribe()`);
