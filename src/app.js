@@ -120,6 +120,10 @@ async function announceEvent(member, type, channelName) {
 
     const audioStream = Readable.from(Buffer.from(audioBuffer));
     audioStream.pipe(ffmpeg.stdin);
+    audioStream.on('end', () => {
+      console.log('[FFmpeg] Audio stream piped, closing stdin');
+      ffmpeg.stdin.end();
+    });
 
     // Create audio player and resource from FFmpeg PCM output
     const player = createAudioPlayer();
