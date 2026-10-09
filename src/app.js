@@ -158,7 +158,21 @@ async function announceEvent(member, type, channelName) {
     console.log(`[announceEvent] Created PCM buffer, size: ${pcmBuffer.byteLength}`);
 
     const player = createAudioPlayer();
-    const audioStream = Readable.from([pcmBuffer]);
+    // Discord/opusscript encodes exactly one 20ms frame at a time:
+    // 48000 Hz * 2 channels * 2 bytes * 0.02 s = 3840 bytes.
+    const FRAME_BYTES = 3840;
+    const frames = [];
+    for (let offset = 0; offset < pcmBuffer.length; offset += FRAME_BYTES) {
+      const slice = pcmBuffer.subarray(offset, offset + FRAME_BYTES);
+      if (slice.length === FRAME_BYTES) {
+        frames.push(slice);
+      } else {
+        const padded = Buffer.alloc(FRAME_BYTES);
+        slice.copy(padded);
+        frames.push(padded);
+      }
+    }
+    const audioStream = Readable.from(frames);
     const resource = createAudioResource(audioStream, {
       inputType: StreamType.Raw,
       inlineVolume: true,
